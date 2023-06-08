@@ -21,7 +21,7 @@ jobs:
   custom-images:
     strategy:
       matrix:
-        build-type: [UbuntuBased, UbuntuJammyBased, WolframBased, Frog, Latex]
+        build-type: [UbuntuBased, UbuntuJammyBased, WolframBased, Frog, Latex, velox-docker-image]
 
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
