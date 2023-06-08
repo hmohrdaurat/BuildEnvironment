@@ -29,7 +29,7 @@ index 36d449ce..1948374d 100644
 @@ -67,6 +67,17 @@ struct MultiplyFunction {
    }
  };
-
+ 
 +template <typename T>
 +struct MixedMultiplyFunction {
 +  FOLLY_ALWAYS_INLINE void call(double& result, double a, int64_t b) {
@@ -51,7 +51,7 @@ index 9b4d1ae1..f87df490 100644
 @@ -86,6 +86,17 @@ T multiply(const T a, const T b)
    return a * b;
  }
-
+ 
 +template <typename T, typename U>
 +T multiply(const T a, const U b)
 +#if defined(__has_feature)
