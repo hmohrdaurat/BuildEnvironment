@@ -1,0 +1,5 @@
+FROM ghcr.io/little-big-h/dps-docker-image:nightly
+WORKDIR /usr/local/velox
+COPY velox.patch velox.patch
+RUN git apply velox.patch
+RUN apt update && DEBIAN_FRONTEND=noninteractive apt install -yy uuid-dev libfmt-dev libspdlog-dev libopenblas-dev libfftw3-dev liblapacke-dev

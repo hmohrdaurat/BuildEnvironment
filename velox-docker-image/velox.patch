@@ -1,0 +1,83 @@
+diff --git a/velox/dwio/dwrf/proto/CMakeLists.txt b/velox/dwio/dwrf/proto/CMakeLists.txt
+index 02ff2c8d..0ae65562 100644
+--- a/velox/dwio/dwrf/proto/CMakeLists.txt
++++ b/velox/dwio/dwrf/proto/CMakeLists.txt
+@@ -24,8 +24,6 @@ foreach(PROTO ${PROTO_FILES})
+        "${PROJECT_BINARY_DIR}/${PROTO_DIR}/${PROTO_NAME}.pb.cc")
+   list(APPEND PROTO_HDRS
+        "${PROJECT_BINARY_DIR}/${PROTO_DIR}/${PROTO_NAME}.pb.h")
+-  list(APPEND PROTO_FILES_FULL
+-       "${PROJECT_SOURCE_DIR}/${PROTO_DIR}/${PROTO_NAME}.proto")
+ endforeach()
+ set(PROTO_OUTPUT_FILES ${PROTO_HDRS} ${PROTO_SRCS})
+ set_source_files_properties(${PROTO_OUTPUT_FILES} PROPERTIES GENERATED TRUE)
+@@ -33,8 +31,8 @@ set_source_files_properties(${PROTO_OUTPUT_FILES} PROPERTIES GENERATED TRUE)
+ add_custom_command(
+   OUTPUT ${PROTO_OUTPUT_FILES}
+   COMMAND
+-    ${Protobuf_PROTOC_EXECUTABLE} --proto_path ${CMAKE_SOURCE_DIR}/ --proto_path
+-    ${Protobuf_INCLUDE_DIRS} --cpp_out ${CMAKE_BINARY_DIR} ${PROTO_FILES_FULL}
++    ${Protobuf_PROTOC_EXECUTABLE} --proto_path ${PROJECT_SOURCE_DIR}/ --proto_path
++    ${Protobuf_INCLUDE_DIRS} --cpp_out ${PROJECT_BINARY_DIR} ${PROTO_FILES}
+   DEPENDS ${Protobuf_PROTOC_EXECUTABLE}
+   COMMENT "Running PROTO compiler"
+   VERBATIM)
+diff --git a/velox/functions/prestosql/Arithmetic.h b/velox/functions/prestosql/Arithmetic.h
+index 36d449ce..1948374d 100644
+--- a/velox/functions/prestosql/Arithmetic.h
++++ b/velox/functions/prestosql/Arithmetic.h
+@@ -67,6 +67,17 @@ struct MultiplyFunction {
+   }
+ };
+
++template <typename T>
++struct MixedMultiplyFunction {
++  FOLLY_ALWAYS_INLINE void call(double& result, double a, int64_t b) {
++    result = multiply(a, b);
++  }
++
++  FOLLY_ALWAYS_INLINE void call(double& result, int64_t a, double b) {
++    result = multiply(a, b);
++  }
++};
++
+ template <typename T>
+ struct DivideFunction {
+   template <typename TInput>
+diff --git a/velox/functions/prestosql/ArithmeticImpl.h b/velox/functions/prestosql/ArithmeticImpl.h
+index 9b4d1ae1..f87df490 100644
+--- a/velox/functions/prestosql/ArithmeticImpl.h
++++ b/velox/functions/prestosql/ArithmeticImpl.h
+@@ -86,6 +86,17 @@ T multiply(const T a, const T b)
+   return a * b;
+ }
+
++template <typename T, typename U>
++T multiply(const T a, const U b)
++#if defined(__has_feature)
++#if __has_feature(__address_sanitizer__)
++    __attribute__((__no_sanitize__("signed-integer-overflow")))
++#endif
++#endif
++{
++  return a * b;
++}
++
+ // This is used by Velox for floating points divide.
+ template <typename T>
+ T divide(const T& a, const T& b)
+diff --git a/velox/functions/prestosql/registration/ArithmeticFunctionsRegistration.cpp b/velox/functions/prestosql/registration/ArithmeticFunctionsRegistration.cpp
+index 652367e5..6af1897a 100644
+--- a/velox/functions/prestosql/registration/ArithmeticFunctionsRegistration.cpp
++++ b/velox/functions/prestosql/registration/ArithmeticFunctionsRegistration.cpp
+@@ -26,6 +26,10 @@ void registerSimpleFunctions() {
+   registerBinaryFloatingPoint<PlusFunction>({"plus"});
+   registerBinaryFloatingPoint<MinusFunction>({"minus"});
+   registerBinaryFloatingPoint<MultiplyFunction>({"multiply"});
++  registerFunction<MixedMultiplyFunction, double, double, int64_t>(
++      {"multiply"});
++  registerFunction<MixedMultiplyFunction, double, int64_t, double>(
++      {"multiply"});
+   registerBinaryFloatingPoint<DivideFunction>({"divide"});
+   registerBinaryFloatingPoint<ModulusFunction>({"mod"});
+   registerUnaryNumeric<CeilFunction>({"ceil", "ceiling"});
