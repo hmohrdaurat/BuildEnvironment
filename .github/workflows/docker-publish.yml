@@ -21,7 +21,7 @@ jobs:
   custom-images:
     strategy:
       matrix:
-        build-type: [UbuntuBased, UbuntuJammyBased, WolframBased, Frog, Latex, velox-docker-image]
+        build-type: [velox-docker-image]
 
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
@@ -59,54 +59,3 @@ jobs:
           IMAGE_TAG=$(echo ${{ matrix.build-type }} | tr '[A-Z]' '[a-z]')
           docker tag $IMAGE_TAG $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
-
-  raspi-images:
-    strategy:
-      matrix:
-        build-type: [ARMDebian]
-
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push'
-
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Build image
-        uses: pguyot/arm-runner-action@v2
-        id: build_image
-        with:
-          base_image: raspios_lite_arm64:latest
-
-          commands: |
-            apt update
-            DEBIAN_FRONTEND=noninteractive apt install -yy curl
-            curl -sSL https://get.docker.com | sh
-            IMAGE_TAG=$(echo ${{ matrix.build-type }} | tr '[A-Z]' '[a-z]')
-            docker build . --file ${{ matrix.build-type }}/Dockerfile --tag $IMAGE_TAG
-
-      - name: Log into registry
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login docker.pkg.github.com -u ${{ github.actor }} --password-stdin
-
-      - name: Push image
-        run: |
-          IMAGE_ID=docker.pkg.github.com/${{ github.repository }}/${{ matrix.build-type }}
-
-          # Change all uppercase to lowercase
-          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
-
-          # Strip git ref prefix from version
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
-
-          # Strip "v" prefix from tag name
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
-
-          # Use Docker `latest` tag convention
-          [ "$VERSION" == "main" ] && VERSION=latest
-
-          echo IMAGE_ID=$IMAGE_ID
-          echo VERSION=$VERSION
-
-          IMAGE_TAG=$(echo ${{ matrix.build-type }} | tr '[A-Z]' '[a-z]')
-          docker tag $IMAGE_TAG $IMAGE_ID:$VERSION
-          docker push $IMAGE_ID:$VERSION
-
