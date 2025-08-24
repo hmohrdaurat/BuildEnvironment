@@ -6,8 +6,8 @@ RUN apt install lldb-15 clang-15 libomp5-15 libomp-15-dev -y
 RUN update-alternatives --install /usr/bin/clang clang /usr/bin/clang-15 200
 RUN update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-15 200
 RUN update-alternatives --install /usr/bin/lldb lldb /usr/bin/lldb-15 200
-RUN apt install ca-certificates gpg wget
-RUN wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | RUN tee /usr/share/keyrings/kitware-archive-keyring.gpg >/dev/null
+RUN apt install ca-certificates gpg wget -y
+RUN wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | tee /usr/share/keyrings/kitware-archive-keyring.gpg >/dev/null
 RUN echo 'deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ jammy main' | tee /etc/apt/sources.list.d/kitware.list >/dev/null
 RUN apt update -y
 RUN apt install kitware-archive-keyring -y
