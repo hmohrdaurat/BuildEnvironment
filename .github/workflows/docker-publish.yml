@@ -14,11 +14,12 @@ on:
 
   # Run tests for any PRs.
   pull_request:
+    branches: [ '*' ]
 
 jobs:
   # Push image to GitHub Packages.
   # See also https://docs.docker.com/docker-hub/builds/
-  custom-images:
+  build-and-deploy:
     strategy:
       matrix:
         build-type: [velox-docker-image]
@@ -59,3 +60,19 @@ jobs:
           IMAGE_TAG=$(echo ${{ matrix.build-type }} | tr '[A-Z]' '[a-z]')
           docker tag $IMAGE_TAG $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
+          
+  build-only:
+    strategy:
+      matrix:
+        build-type: [velox-docker-image]
+
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Build image (Test)
+        run: |
+          IMAGE_TAG=$(echo ${{ matrix.build-type }} | tr '[A-Z]' '[a-z]')
+          docker build ${{ matrix.build-type }} --file ${{ matrix.build-type }}/Dockerfile --tag $IMAGE_TAG
