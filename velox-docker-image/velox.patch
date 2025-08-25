@@ -1,45 +1,34 @@
 diff --git a/scripts/setup-helper-functions.sh b/scripts/setup-helper-functions.sh
-index 4f0a11e15..52c9180e9 100644
+index 078454f8c..cd150cdb3 100755
 --- a/scripts/setup-helper-functions.sh
 +++ b/scripts/setup-helper-functions.sh
-@@ -163,6 +163,8 @@ function cmake_install {
-   cmake -Wno-dev -B"${BINARY_DIR}" \
+@@ -269,6 +269,8 @@ function cmake_install {
      -GNinja \
+     -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
      -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
 +    -DCMAKE_CXX_COMPILER=clang++ \
 +    -DCMAKE_C_COMPILER=clang \
-     -DCMAKE_CXX_STANDARD=17 \
      "${INSTALL_PREFIX+-DCMAKE_PREFIX_PATH=}${INSTALL_PREFIX-}" \
      "${INSTALL_PREFIX+-DCMAKE_INSTALL_PREFIX=}${INSTALL_PREFIX-}" \
-diff --git a/velox/dwio/dwrf/proto/CMakeLists.txt b/velox/dwio/dwrf/proto/CMakeLists.txt
-index 02ff2c8d7..0ae655626 100644
---- a/velox/dwio/dwrf/proto/CMakeLists.txt
-+++ b/velox/dwio/dwrf/proto/CMakeLists.txt
-@@ -24,8 +24,6 @@ foreach(PROTO ${PROTO_FILES})
-        "${PROJECT_BINARY_DIR}/${PROTO_DIR}/${PROTO_NAME}.pb.cc")
-   list(APPEND PROTO_HDRS
-        "${PROJECT_BINARY_DIR}/${PROTO_DIR}/${PROTO_NAME}.pb.h")
--  list(APPEND PROTO_FILES_FULL
--       "${PROJECT_SOURCE_DIR}/${PROTO_DIR}/${PROTO_NAME}.proto")
- endforeach()
- set(PROTO_OUTPUT_FILES ${PROTO_HDRS} ${PROTO_SRCS})
- set_source_files_properties(${PROTO_OUTPUT_FILES} PROPERTIES GENERATED TRUE)
-@@ -33,8 +31,8 @@ set_source_files_properties(${PROTO_OUTPUT_FILES} PROPERTIES GENERATED TRUE)
- add_custom_command(
-   OUTPUT ${PROTO_OUTPUT_FILES}
-   COMMAND
--    ${Protobuf_PROTOC_EXECUTABLE} --proto_path ${CMAKE_SOURCE_DIR}/ --proto_path
--    ${Protobuf_INCLUDE_DIRS} --cpp_out ${CMAKE_BINARY_DIR} ${PROTO_FILES_FULL}
-+    ${Protobuf_PROTOC_EXECUTABLE} --proto_path ${PROJECT_SOURCE_DIR}/ --proto_path
-+    ${Protobuf_INCLUDE_DIRS} --cpp_out ${PROJECT_BINARY_DIR} ${PROTO_FILES}
-   DEPENDS ${Protobuf_PROTOC_EXECUTABLE}
-   COMMENT "Running PROTO compiler"
-   VERBATIM)
+     -DCMAKE_CXX_FLAGS="$COMPILER_FLAGS" \
+diff --git a/scripts/setup-ubuntu.sh b/scripts/setup-ubuntu.sh
+index ead291910..cb36e7edf 100755
+--- a/scripts/setup-ubuntu.sh
++++ b/scripts/setup-ubuntu.sh
+@@ -224,7 +224,7 @@ function install_adapters {
+ }
+ 
+ function install_faiss_deps {
+-  sudo apt-get install -y libopenblas-dev libomp-dev
++  sudo apt-get install -y libopenblas-dev libomp-15-dev
+ }
+ 
+ function install_velox_deps {
 diff --git a/velox/exec/HashBuild.cpp b/velox/exec/HashBuild.cpp
-index bfeb1cd6f..360a54b08 100644
+index 4e44d6f71..41d7e1a97 100644
 --- a/velox/exec/HashBuild.cpp
 +++ b/velox/exec/HashBuild.cpp
-@@ -158,7 +158,8 @@ void HashBuild::setupTable() {
+@@ -144,7 +144,8 @@ void HashBuild::setupTable() {
          operatorCtx_->driverCtx()
              ->queryConfig()
              .minTableRowsForParallelJoinBuild(),
@@ -49,7 +38,7 @@ index bfeb1cd6f..360a54b08 100644
    } else {
      // (Left) semi and anti join with no extra filter only needs to know whether
      // there is a match. Hence, no need to store entries with duplicate keys.
-@@ -178,7 +179,8 @@ void HashBuild::setupTable() {
+@@ -164,7 +165,8 @@ void HashBuild::setupTable() {
            operatorCtx_->driverCtx()
                ->queryConfig()
                .minTableRowsForParallelJoinBuild(),
@@ -59,7 +48,7 @@ index bfeb1cd6f..360a54b08 100644
      } else {
        // Ignore null keys
        table_ = HashTable<true>::createForJoin(
-@@ -189,7 +191,8 @@ void HashBuild::setupTable() {
+@@ -175,7 +177,8 @@ void HashBuild::setupTable() {
            operatorCtx_->driverCtx()
                ->queryConfig()
                .minTableRowsForParallelJoinBuild(),
@@ -70,37 +59,39 @@ index bfeb1cd6f..360a54b08 100644
    }
    analyzeKeys_ = table_->hashMode() != BaseHashTable::HashMode::kHash;
 diff --git a/velox/exec/HashProbe.cpp b/velox/exec/HashProbe.cpp
-index 228358c35..37c7c2510 100644
+index 7bbfe4765..2239f02db 100644
 --- a/velox/exec/HashProbe.cpp
 +++ b/velox/exec/HashProbe.cpp
-@@ -23,9 +23,6 @@ namespace facebook::velox::exec {
+@@ -27,12 +27,6 @@ using facebook::velox::common::testutil::TestValue;
  
- namespace {
+ namespace facebook::velox::exec {
  
+-namespace {
+-
 -// Batch size used when iterating the row container.
 -constexpr int kBatchSize = 1024;
+-} // namespace
 -
- // Returns the type for the hash table row. Build side keys first,
- // then dependent build side columns.
- RowTypePtr makeTableType(
-@@ -996,10 +993,10 @@ void HashProbe::fillFilterInput(vector_size_t size) {
- void HashProbe::prepareFilterRowsForNullAwareJoin(
+ // static
+ RowTypePtr HashProbe::makeTableType(
+     const RowType* type,
+@@ -1254,10 +1248,10 @@ void HashProbe::prepareFilterRowsForNullAwareJoin(
+     RowVectorPtr& filterInput,
      vector_size_t numRows,
      bool filterPropagateNulls) {
 -  VELOX_CHECK_LE(numRows, kBatchSize);
 +  VELOX_CHECK_LE(numRows, outputBatchSize_);
    if (filterTableInput_ == nullptr) {
--    filterTableInput_ =
+     filterTableInput_ =
 -        BaseVector::create<RowVector>(filterInputType_, kBatchSize, pool());
-+    filterTableInput_ = BaseVector::create<RowVector>(
-+        filterInputType_, outputBatchSize_, pool());
++        BaseVector::create<RowVector>(filterInputType_, outputBatchSize_, pool());
    }
  
    if (filterPropagateNulls) {
-@@ -1067,8 +1064,8 @@ void HashProbe::applyFilterOnTableRowsForNullAwareJoin(
+@@ -1338,8 +1332,8 @@ void HashProbe::applyFilterOnTableRowsForNullAwareJoin(
+     return;
    }
-   auto* tableRows = table_->rows();
-   VELOX_CHECK(tableRows, "Should not move rows in hash joins");
+   VELOX_CHECK(table_->rows(), "Should not move rows in hash joins");
 -  char* data[kBatchSize];
 -  while (auto numRows = iterator(data, kBatchSize)) {
 +  char** data = new char*[outputBatchSize_];
@@ -108,7 +99,7 @@ index 228358c35..37c7c2510 100644
      filterTableInput_->resize(numRows);
      filterTableInputRows_.resizeFill(numRows, true);
      for (auto& projection : filterTableProjections_) {
-@@ -1112,6 +1109,7 @@ void HashProbe::applyFilterOnTableRowsForNullAwareJoin(
+@@ -1382,6 +1376,7 @@ void HashProbe::applyFilterOnTableRowsForNullAwareJoin(
        }
      });
    }
@@ -117,18 +108,20 @@ index 228358c35..37c7c2510 100644
  
  SelectivityVector HashProbe::evalFilterForNullAwareJoin(
 diff --git a/velox/exec/HashTable.cpp b/velox/exec/HashTable.cpp
-index 44cd1e82e..e45a95a90 100644
+index 4c4a8c463..e9a6cda5c 100644
 --- a/velox/exec/HashTable.cpp
 +++ b/velox/exec/HashTable.cpp
-@@ -53,16 +53,23 @@ HashTable<ignoreNullKeys>::HashTable(
+@@ -52,18 +52,25 @@ HashTable<ignoreNullKeys>::HashTable(
+     bool isJoinBuild,
      bool hasProbedFlag,
      uint32_t minTableSizeForParallelJoinBuild,
-     memory::MemoryPool* pool,
--    const std::shared_ptr<velox::HashStringAllocator>& stringArena)
-+    const std::shared_ptr<velox::HashStringAllocator>& stringArena, bool hashAdaptivityEnabled)
+-    memory::MemoryPool* pool)
++    memory::MemoryPool* pool, bool hashAdaptivityEnabled)
      : BaseHashTable(std::move(hashers)),
+       pool_(pool),
        minTableSizeForParallelJoinBuild_(minTableSizeForParallelJoinBuild),
-       isJoinBuild_(isJoinBuild) {
+       isJoinBuild_(isJoinBuild),
+       buildPartitionBounds_(raw_vector<PartitionBoundIndexType>(pool)) {
    std::vector<TypePtr> keys;
 -  for (auto& hasher : hashers_) {
 -    keys.push_back(hasher->type());
@@ -150,20 +143,20 @@ index 44cd1e82e..e45a95a90 100644
  
    rows_ = std::make_unique<RowContainer>(
 diff --git a/velox/exec/HashTable.h b/velox/exec/HashTable.h
-index eec394caf..f5fb64b9c 100644
+index c19d74727..2079068ee 100644
 --- a/velox/exec/HashTable.h
 +++ b/velox/exec/HashTable.h
-@@ -427,7 +427,8 @@ class HashTable : public BaseHashTable {
+@@ -485,7 +485,8 @@ class HashTable : public BaseHashTable {
+       bool isJoinBuild,
        bool hasProbedFlag,
        uint32_t minTableSizeForParallelJoinBuild,
-       memory::MemoryPool* pool,
--      const std::shared_ptr<velox::HashStringAllocator>& stringArena = nullptr);
-+      const std::shared_ptr<velox::HashStringAllocator>& stringArena = nullptr,
+-      memory::MemoryPool* pool);
++      memory::MemoryPool* pool,
 +      bool hashAdaptivityEnabled = true);
  
-   static std::unique_ptr<HashTable> createForAggregation(
-       std::vector<std::unique_ptr<VectorHasher>>&& hashers,
-@@ -453,7 +454,8 @@ class HashTable : public BaseHashTable {
+   ~HashTable() override = default;
+ 
+@@ -510,7 +511,8 @@ class HashTable : public BaseHashTable {
        bool allowDuplicates,
        bool hasProbedFlag,
        uint32_t minTableSizeForParallelJoinBuild,
@@ -173,77 +166,36 @@ index eec394caf..f5fb64b9c 100644
      return std::make_unique<HashTable>(
          std::move(hashers),
          std::vector<Accumulator>{},
-@@ -462,7 +464,9 @@ class HashTable : public BaseHashTable {
+@@ -519,7 +521,8 @@ class HashTable : public BaseHashTable {
          true, // isJoinBuild
          hasProbedFlag,
          minTableSizeForParallelJoinBuild,
 -        pool);
 +        pool,
-+        nullptr,
 +        hashAdaptivityEnabled);
    }
  
-   void groupProbe(HashLookup& lookup) override;
+   void groupProbe(HashLookup& lookup, int8_t spillInputStartPartitionBit)
 diff --git a/velox/exec/Task.h b/velox/exec/Task.h
-index cb4a8507f..f4012b6be 100644
+index 4768ef2f0..ea1d1bf4f 100644
 --- a/velox/exec/Task.h
 +++ b/velox/exec/Task.h
-@@ -618,6 +618,10 @@ class Task : public std::enable_shared_from_this<Task> {
-     terminate(TaskState::kFinished).wait();
-   }
+@@ -780,6 +780,10 @@ class Task : public std::enable_shared_from_this<Task> {
+   /// Returns true if all the splits have finished.
+   bool testingAllSplitsFinished();
  
 +  auto const& childPools() const {
 +    return childPools_;
 +  }
 +
   private:
-   Task(
-       const std::string& taskId,
-diff --git a/velox/expression/Expr.cpp b/velox/expression/Expr.cpp
-index bd35ea322..8b90f1784 100644
---- a/velox/expression/Expr.cpp
-+++ b/velox/expression/Expr.cpp
-@@ -1109,7 +1109,7 @@ bool Expr::removeSureNulls(
-       continue;
-     }
- 
--    if (values->mayHaveNulls()) {
-+    /*if (values->mayHaveNulls()) {
-       LocalDecodedVector decoded(context, *values, rows);
-       if (auto* rawNulls = decoded->nulls()) {
-         if (!result) {
-@@ -1118,7 +1118,7 @@ bool Expr::removeSureNulls(
-         auto bits = result->asMutableRange().bits();
-         bits::andBits(bits, rawNulls, rows.begin(), rows.end());
-       }
--    }
-+    }*/
-   }
-   if (result) {
-     result->updateBounds();
-@@ -1144,7 +1144,7 @@ void Expr::evalWithNulls(
-     return;
-   }
- 
--  if (propagatesNulls_ && !skipFieldDependentOptimizations()) {
-+  if (false/*propagatesNulls_ && !skipFieldDependentOptimizations()*/) {
-     bool mayHaveNulls = false;
-     for (auto* field : distinctFields_) {
-       const auto& vector = context.getField(field->index(context));
-@@ -1199,7 +1199,7 @@ void Expr::evalWithMemo(
-   }
-   ++baseOfDictionaryRepeats_;
- 
--  if (baseOfDictionaryRepeats_ == 1) {
-+  if (true/*baseOfDictionaryRepeats_ == 1*/) {
-     evalWithNulls(rows, context, result);
-     baseOfDictionary_ = base;
-     dictionaryCache_ = result;
+   // Hook of system-wide running task list.
+   struct TaskListEntry {
 diff --git a/velox/functions/prestosql/Arithmetic.h b/velox/functions/prestosql/Arithmetic.h
-index 05d427bf1..4539d65b6 100644
+index 836e073be..2980d162e 100644
 --- a/velox/functions/prestosql/Arithmetic.h
 +++ b/velox/functions/prestosql/Arithmetic.h
-@@ -107,6 +107,17 @@ struct IntervalMultiplyFunction {
+@@ -124,6 +124,17 @@ struct IntervalMultiplyFunction {
    }
  };
  
@@ -261,7 +213,7 @@ index 05d427bf1..4539d65b6 100644
  template <typename T>
  struct DivideFunction {
    template <typename TInput>
-@@ -123,6 +134,33 @@ struct DivideFunction {
+@@ -182,6 +193,33 @@ struct IntervalDivideFunction {
    }
  };
  
@@ -293,13 +245,13 @@ index 05d427bf1..4539d65b6 100644
 +};
 +
  template <typename T>
- struct IntervalDivideFunction {
-   FOLLY_ALWAYS_INLINE void call(int64_t& result, int64_t a, double b)
+ struct ModulusFunction {
+   template <typename TInput>
 diff --git a/velox/functions/prestosql/ArithmeticImpl.h b/velox/functions/prestosql/ArithmeticImpl.h
-index 11fe000d7..44bbe9fb3 100644
+index a7b85dd78..46f4afcd2 100644
 --- a/velox/functions/prestosql/ArithmeticImpl.h
 +++ b/velox/functions/prestosql/ArithmeticImpl.h
-@@ -86,6 +86,17 @@ T multiply(const T a, const T b)
+@@ -126,6 +126,17 @@ T multiply(const T a, const T b)
    return a * b;
  }
  
@@ -317,7 +269,7 @@ index 11fe000d7..44bbe9fb3 100644
  // This is used by Velox for floating points divide.
  template <typename T>
  T divide(const T& a, const T& b)
-@@ -99,6 +110,18 @@ T divide(const T& a, const T& b)
+@@ -139,6 +150,18 @@ T divide(const T& a, const T& b)
    return result;
  }
  
@@ -336,14 +288,14 @@ index 11fe000d7..44bbe9fb3 100644
  // This is used by Velox for floating points modulus.
  template <typename T>
  T modulus(const T a, const T b) {
-diff --git a/velox/functions/prestosql/registration/ArithmeticFunctionsRegistration.cpp b/velox/functions/prestosql/registration/ArithmeticFunctionsRegistration.cpp
-index b04695d11..d629967f5 100644
---- a/velox/functions/prestosql/registration/ArithmeticFunctionsRegistration.cpp
-+++ b/velox/functions/prestosql/registration/ArithmeticFunctionsRegistration.cpp
-@@ -51,12 +51,20 @@ void registerSimpleFunctions(const std::string& prefix) {
-       IntervalDayTime,
+diff --git a/velox/functions/prestosql/registration/MathematicalOperatorsRegistration.cpp b/velox/functions/prestosql/registration/MathematicalOperatorsRegistration.cpp
+index bab24264a..9229d8f0d 100644
+--- a/velox/functions/prestosql/registration/MathematicalOperatorsRegistration.cpp
++++ b/velox/functions/prestosql/registration/MathematicalOperatorsRegistration.cpp
+@@ -79,6 +79,10 @@ void registerMathOperators(const std::string& prefix = "") {
+       IntervalYearMonth,
        double,
-       IntervalDayTime>({prefix + "multiply"});
+       IntervalYearMonth>({prefix + "multiply"});
 +  registerFunction<MixedMultiplyFunction, double, double, int64_t>(
 +      {prefix + "multiply"});
 +  registerFunction<MixedMultiplyFunction, double, int64_t, double>(
@@ -351,13 +303,14 @@ index b04695d11..d629967f5 100644
    registerBinaryFloatingPoint<DivideFunction>({prefix + "divide"});
    registerFunction<
        IntervalDivideFunction,
-       IntervalDayTime,
-       IntervalDayTime,
+@@ -90,6 +94,10 @@ void registerMathOperators(const std::string& prefix = "") {
+       IntervalYearMonth,
+       IntervalYearMonth,
        double>({prefix + "divide"});
 +  registerFunction<MixedDivideFunction, double, double, int64_t>(
 +      {prefix + "divide"});
 +  registerFunction<MixedDivideFunction, double, int64_t, double>(
 +      {prefix + "divide"});
    registerBinaryFloatingPoint<ModulusFunction>({prefix + "mod"});
-   registerUnaryNumeric<CeilFunction>({prefix + "ceil", prefix + "ceiling"});
-   registerUnaryNumeric<FloorFunction>({prefix + "floor"});
+ }
+ 
