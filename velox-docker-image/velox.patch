@@ -59,13 +59,15 @@ index 4e44d6f71..41d7e1a97 100644
    }
    analyzeKeys_ = table_->hashMode() != BaseHashTable::HashMode::kHash;
 diff --git a/velox/exec/HashProbe.cpp b/velox/exec/HashProbe.cpp
-index 7bbfe4765..269ca25ee 100644
+index 7bbfe4765..2239f02db 100644
 --- a/velox/exec/HashProbe.cpp
 +++ b/velox/exec/HashProbe.cpp
-@@ -29,10 +29,6 @@ namespace facebook::velox::exec {
+@@ -27,12 +27,6 @@ using facebook::velox::common::testutil::TestValue;
  
- namespace {
+ namespace facebook::velox::exec {
  
+-namespace {
+-
 -// Batch size used when iterating the row container.
 -constexpr int kBatchSize = 1024;
 -} // namespace
@@ -73,7 +75,7 @@ index 7bbfe4765..269ca25ee 100644
  // static
  RowTypePtr HashProbe::makeTableType(
      const RowType* type,
-@@ -1254,10 +1250,10 @@ void HashProbe::prepareFilterRowsForNullAwareJoin(
+@@ -1254,10 +1248,10 @@ void HashProbe::prepareFilterRowsForNullAwareJoin(
      RowVectorPtr& filterInput,
      vector_size_t numRows,
      bool filterPropagateNulls) {
@@ -86,7 +88,7 @@ index 7bbfe4765..269ca25ee 100644
    }
  
    if (filterPropagateNulls) {
-@@ -1338,8 +1334,8 @@ void HashProbe::applyFilterOnTableRowsForNullAwareJoin(
+@@ -1338,8 +1332,8 @@ void HashProbe::applyFilterOnTableRowsForNullAwareJoin(
      return;
    }
    VELOX_CHECK(table_->rows(), "Should not move rows in hash joins");
@@ -97,7 +99,7 @@ index 7bbfe4765..269ca25ee 100644
      filterTableInput_->resize(numRows);
      filterTableInputRows_.resizeFill(numRows, true);
      for (auto& projection : filterTableProjections_) {
-@@ -1382,6 +1378,7 @@ void HashProbe::applyFilterOnTableRowsForNullAwareJoin(
+@@ -1382,6 +1376,7 @@ void HashProbe::applyFilterOnTableRowsForNullAwareJoin(
        }
      });
    }
@@ -141,7 +143,7 @@ index 4c4a8c463..fea614421 100644
  
    rows_ = std::make_unique<RowContainer>(
 diff --git a/velox/exec/HashTable.h b/velox/exec/HashTable.h
-index c19d74727..ba07778c1 100644
+index c19d74727..2079068ee 100644
 --- a/velox/exec/HashTable.h
 +++ b/velox/exec/HashTable.h
 @@ -485,7 +485,8 @@ class HashTable : public BaseHashTable {
@@ -154,6 +156,26 @@ index c19d74727..ba07778c1 100644
  
    ~HashTable() override = default;
  
+@@ -510,7 +511,8 @@ class HashTable : public BaseHashTable {
+       bool allowDuplicates,
+       bool hasProbedFlag,
+       uint32_t minTableSizeForParallelJoinBuild,
+-      memory::MemoryPool* pool) {
++      memory::MemoryPool* pool,
++      bool hashAdaptivityEnabled = true) {
+     return std::make_unique<HashTable>(
+         std::move(hashers),
+         std::vector<Accumulator>{},
+@@ -519,7 +521,8 @@ class HashTable : public BaseHashTable {
+         true, // isJoinBuild
+         hasProbedFlag,
+         minTableSizeForParallelJoinBuild,
+-        pool);
++        pool,
++        hashAdaptivityEnabled);
+   }
+ 
+   void groupProbe(HashLookup& lookup, int8_t spillInputStartPartitionBit)
 diff --git a/velox/exec/Task.h b/velox/exec/Task.h
 index 4768ef2f0..ea1d1bf4f 100644
 --- a/velox/exec/Task.h
