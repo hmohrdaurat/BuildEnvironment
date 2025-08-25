@@ -108,7 +108,7 @@ index 7bbfe4765..2239f02db 100644
  
  SelectivityVector HashProbe::evalFilterForNullAwareJoin(
 diff --git a/velox/exec/HashTable.cpp b/velox/exec/HashTable.cpp
-index 4c4a8c463..fea614421 100644
+index 4c4a8c463..e9a6cda5c 100644
 --- a/velox/exec/HashTable.cpp
 +++ b/velox/exec/HashTable.cpp
 @@ -52,18 +52,25 @@ HashTable<ignoreNullKeys>::HashTable(
@@ -134,7 +134,7 @@ index 4c4a8c463..fea614421 100644
 +        hashMode_ = HashMode::kHash;
 +      }
      }
-+  else {
++  } else {
 +    for (auto& hasher : hashers_) {
 +      keys.push_back(hasher->type());
 +    }
